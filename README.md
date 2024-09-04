@@ -21,7 +21,7 @@ The **sftppathlib** relies on an instance of an **SFTPClient** to be used. This 
 
 ### With setup
 
-The default conneciton will use Paramiko's **SSHClient** to connect. If you are only connecting to one SFTP server, it's recommended to create a config file in the application directory:
+The default connection will use Paramiko's **SSHClient** to connect. If you are only connecting to one SFTP server, it's recommended to create a config file in the application directory:
 
 * Windows: `~/AppData/Roaming/sftppathlib/config.yaml`
 * Linux: `~/.local/share/sftppathlib/config.yaml`
