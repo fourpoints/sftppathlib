@@ -7,21 +7,21 @@ The documentation is the same as the standard [**pathlib**](https://docs.python.
 
 ## Differences
 
-The methods **expanduser()**, **readlink()**, **hardlink_to**, **replace()**, **owner()**, **group()**, **from_uri**, **as_uri()** are not supported. Subsequently, any method in **pathlib_abc** which relies on these will also fail. For some of them, it's because they don't have any meaning on SFTP clients, others because I don't trust myself to implement them correctly.
+The methods `expanduser()`, `readlink()`, `hardlink_to`, `replace()`, `owner()`, `group()`, `from_uri()`, `as_uri()` are not supported. Subsequently, any method in **pathlib_abc** which relies on these will also fail. For some of them, it's because they don't have any meaning on SFTP clients, others because I don't trust myself to implement them correctly.
 
-The methods **stat(..., follow_symlinks)**, **symlink_to(..., target_is_directory)**, **chmod(..., follow_symlinks)** have their named parameters ignored, since Paramiko's **SFTPClient** does not support them.
+The methods `stat(..., follow_symlinks)`, `symlink_to(..., target_is_directory)`, `chmod(..., follow_symlinks)` have their named parameters ignored, since Paramiko's `SFTPClient` does not support them.
 
-Some of Paramiko's **SFTPClient** methods would return status codes like `SFTP_OK`; these are ignored.
+Some of Paramiko's `SFTPClient` methods would return status codes like `SFTP_OK`; these are ignored.
 
 
 ## Usage
 
-The **sftppathlib** relies on an instance of an **SFTPClient** to be used. This can be either be created in the background using the default setup, or manually and passing it to the **\_\_init\_\_** constructor.
+The **sftppathlib** relies on an instance of an `SFTPClient` to be used. This can be either be created in the background using the default setup, or manually and passing it to the `__init__` constructor.
 
 
 ### With setup
 
-The default connection will use Paramiko's **SSHClient** to connect. If you are only connecting to one SFTP server, it's recommended to create a config file in the application directory:
+The default connection will use Paramiko's `SSHClient` to connect. If you are only connecting to one SFTP server, it's recommended to create a config file in the application directory:
 
 * Windows: `~/AppData/Roaming/sftppathlib/config.yaml`
 * Linux: `~/.local/share/sftppathlib/config.yaml`
@@ -38,7 +38,7 @@ password: <password>
 
 It will also use the key defined in `~/.ssh/known_hosts`. This will typically include an entry starting with `[sftp.<domain>]:22`.
 
-After this, **sftppathlib.SFTPPath** can be used like **pathlib.Path**:
+After this, `sftppathlib.SFTPPath` can be used like `pathlib.Path`:
 
 ```py
 from sftppathlib import SFTPPath
