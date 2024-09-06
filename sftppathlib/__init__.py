@@ -5,6 +5,7 @@ from pathlib import PurePath, Path
 from pathlib_abc import PathBase
 from stat import S_ISDIR, S_ISREG
 
+__version__ = "0.2.0"
 logger = logging.getLogger(__name__)
 
 
