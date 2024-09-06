@@ -9,7 +9,7 @@ The documentation is the same as the standard [**pathlib**](https://docs.python.
 
 The methods **expanduser()**, **readlink()**, **hardlink_to**, **replace()**, **owner()**, **group()**, **from_uri**, **as_uri()** are not supported. Subsequently, any method in **pathlib_abc** which relies on these will also fail. For some of them, it's because they don't have any meaning on SFTP clients, others because I don't trust myself to implement them correctly.
 
-The methods **stat**, **symlink_to**, **chmod** have their respective parameters **follow_symlinks**, **target_is_directory**, **follow_symlinks** ignored, since Paramiko's **SFTPClient** does not support them.
+The methods **stat(..., follow_symlinks)**, **symlink_to(..., target_is_directory)**, **chmod(..., follow_symlinks)** have their named parameters ignored, since Paramiko's **SFTPClient** does not support them.
 
 Some of Paramiko's **SFTPClient** methods would return status codes like `SFTP_OK`; these are ignored.
 
