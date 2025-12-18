@@ -12,7 +12,7 @@ from stat import S_ISDIR, S_ISREG
 from typing import TypedDict
 from urllib.parse import urlparse
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 logger = logging.getLogger(__name__)
 _CACHED_CLIENT = None
 
@@ -238,11 +238,11 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
 
     vfsopen = open
 
-    def __open(self, mode, buffering):
+    def __open(self, mode, buffering=-1):
         return self._accessor.open(self._as_path(), mode=mode, bufsize=buffering)
 
     __open_reader__ = partial(__open, mode="r")
-    __open_writer__ = partial(__open, mode="w")
+    __open_writer__ = __open
 
     def iterdir(self):
         for path in self._accessor.listdir(self._as_path()):
@@ -355,7 +355,7 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
 
     # Required for PathLike objects
     def __fspath__(self):
-        return str(self)
+        return self.as_posix()
 
     __vfspath__ = __fspath__
 
