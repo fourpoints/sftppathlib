@@ -216,7 +216,7 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
     ALIAS = {}
 
     @classmethod
-    def set_netloc(cls, netloc, path_prefix):
+    def set_authority(cls, netloc, path_prefix):
         cls.ALIAS[netloc] = path_prefix
 
     def info(self): return self

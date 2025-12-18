@@ -83,7 +83,7 @@ import paramiko
 import sft
 from sftppathlib import SFTPPath
 
-SFTPPath.set_netloc("example.com", "www")
+SFTPPath.set_authority("example.com", "www")
 
 CREDENTIALS = {
     "hostname": "sftp.<domain>",
