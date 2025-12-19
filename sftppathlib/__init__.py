@@ -12,7 +12,7 @@ from stat import S_ISDIR, S_ISREG
 from typing import TypedDict
 from urllib.parse import urlparse
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 logger = logging.getLogger(__name__)
 # _CACHED_CLIENT = None
 
@@ -91,22 +91,6 @@ def load_configs(config_path):
         if site is not configparser.DEFAULTSECT}
 
 
-# def _load_client():
-#     global _CACHED_CLIENT
-
-#     if _CACHED_CLIENT is None:
-#         config_path = get_config_path()
-#         configs = load_config(config_path)
-#         _CACHED_CLIENT = load_client(configs)
-
-#     return _CACHED_CLIENT
-
-# def config_credentials(config: Config):
-#     _CACHED_CLIENT = load_client(config)
-#     return _CACHED_CLIENT
-# endregion
-
-
 def get_accessor(url):
     authority = urlparse(url).netloc
 
@@ -129,30 +113,8 @@ def get_accessor(url):
     return client
 
 
-class PathBase(ReadablePath, WritablePath, PathInfo):
+class PathBase(PurePath, ReadablePath, WritablePath, PathInfo):
     # https://github.com/barneygale/pathlib-abc/blob/0.2.0/pathlib_abc/__init__.py
-    def __init__(self, arg, *args):
-        paths = []
-        for arg in [arg, *args]:
-            if isinstance(arg, SFTPPath):
-                if arg.parser is not self.parser:
-                    # GH-103631: Convert separators for backwards compatibility.
-                    paths.append(arg.as_posix())
-                else:
-                    paths.extend(arg._raw_paths)
-            else:
-                try:
-                    path = os.fspath(arg)
-                except TypeError:
-                    path = arg
-                if not isinstance(path, str):
-                    raise TypeError(
-                        "argument should be a str or an os.PathLike "
-                        "object where __fspath__ returns a str, "
-                        f"not {type(path).__name__!r}")
-                paths.append(path)
-        self._raw_paths = paths
-
     def exists(self, *, follow_symlinks=True):
         """
         Whether this path exists.
@@ -212,13 +174,10 @@ class PathBase(ReadablePath, WritablePath, PathInfo):
             return False
 
 
-class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
+class SFTPPath(PathBase):
     """Partially copies the interface of pathlib.Path"""
-    # Preferably we'd like to subclass Path, but we have to make sure not to
-    # call Path's methods; we have to re-implement all its methods.
-    # Update: pathlib_abc.PathBase resolves this issue
 
-    __slots__ = ("_accessor", "_raw_parts")
+    __slots__ = ("_accessor",)
     # pathmod = posixpath
     parser = posixpath
 
@@ -294,7 +253,7 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
             if cwd is None:
                 cwd = "/"
             path = self.parser.join(cwd, path)
-        return posixpath.normpath(path)
+        return self.parser.normpath(path)
 
     # Unsupported
     # def expanduser(): pass
@@ -385,7 +344,10 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
     def as_posix(self):
         """Return the string representation of the path with forward (/)
         slashes."""
-        return self._raw_path.replace(self.parser.sep, '/')
+        return self._raw_path
+
+    def __str__(self):
+        return self.as_posix().rstrip(self.parser.sep)
 
     def __repr__(self):
         return f"{type(self).__name__}('{self.as_posix()}')"
