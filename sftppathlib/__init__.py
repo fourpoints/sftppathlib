@@ -12,23 +12,36 @@ from stat import S_ISDIR, S_ISREG
 from typing import TypedDict
 from urllib.parse import urlparse
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 logger = logging.getLogger(__name__)
-_CACHED_CLIENT = None
+# _CACHED_CLIENT = None
+
+# region config
+APP_DIRECTORY = {
+    "win32": "AppData/Roaming",
+    "linux": ".local/share",
+    "darwin": "Library/Application Support",
+}
+
+CACHING = True
+CACHED_CONFIGS = {}
+CACHED_CLIENTS = {}
 
 
 # Ugly, but paramiko.SSHClient.connect.__annotations__ is empty.
-Config = TypedDict("Config", {
+Config = TypedDict("Config", {**{"root": str}, **{
     key: type(value.default)
         if value.default not in (None, inspect._empty)
         else object
     for key, value
     in inspect.signature(paramiko.SSHClient.connect).parameters.items()
     if key != "self"
-})
+}})
 
 
 def load_client(config: Config):
+    config = config.copy()
+    root = config.pop("root", "/")
     ssh_client = paramiko.SSHClient()
     if (key not in config for key in ("pkey", "key_filename")):
         # Uses the file ~/.ssh/known_hosts
@@ -45,55 +58,101 @@ def load_client(config: Config):
         ssh_client.close()
     sftp_client.close = close
 
+    # Root directory
+    sftp_client.root = root
+
     return sftp_client
 
 
-def _load_client():
-    global _CACHED_CLIENT
+def get_config_path():
+    # https://stackoverflow.com/questions/19078969/python-getting-appdata-folder-in-a-cross-platform-way
+    import sys
+    from pathlib import Path
 
-    if _CACHED_CLIENT is None:
-        import configparser
+    home = Path.home()
 
-        def get_app_directory():
-            # https://stackoverflow.com/questions/19078969/python-getting-appdata-folder-in-a-cross-platform-way
-            import sys
+    try:
+        app_directory = APP_DIRECTORY[sys.platform]
+    except KeyError as e:
+        raise OSError(f"Unsupported system '{sys.platform}'.") from e
 
-            home = Path.home()
-
-            if sys.platform == "win32":
-                return home / "AppData/Roaming"
-            elif sys.platform == "linux":
-                return home / ".local/share"
-            elif sys.platform == "darwin":
-                return home / "Library/Application Support"
-            else:
-                raise OSError(f"Unsupported system '{sys.platform}'.")
-
-        def load_config(config_path):
-            # Ugly way to read simple yaml files using the standard library
-            reader = configparser.ConfigParser()
-            content = Path(config_path).expanduser().read_text(encoding="UTF-8")
-            if not content.startswith("["):
-                content = "\n".join(("[config]", content))
-            reader.read_string(content)
-
-            return dict(reader["config"])
-
-        config_path = get_app_directory() / "sftppathlib" / "config.yaml"
-        config = load_config(config_path)
-        _CACHED_CLIENT = load_client(config)
-
-    return _CACHED_CLIENT
+    return home / app_directory / "sftppathlib" / "config.ini"
 
 
-def config_credentials(config: Config):
-    _CACHED_CLIENT = load_client(config)
-    return _CACHED_CLIENT
+def load_configs(config_path):
+    import configparser
+    reader = configparser.ConfigParser()
 
+    with open(config_path, mode="r", encoding="utf-8") as f:
+        reader.read_file(f)
+
+    return {
+        site: dict(attrs) for site, attrs in reader.items()
+        if site is not configparser.DEFAULTSECT}
+
+
+# def _load_client():
+#     global _CACHED_CLIENT
+
+#     if _CACHED_CLIENT is None:
+#         config_path = get_config_path()
+#         configs = load_config(config_path)
+#         _CACHED_CLIENT = load_client(configs)
+
+#     return _CACHED_CLIENT
+
+# def config_credentials(config: Config):
+#     _CACHED_CLIENT = load_client(config)
+#     return _CACHED_CLIENT
+# endregion
+
+
+def get_accessor(url):
+    authority = urlparse(url).netloc
+
+    if authority in CACHED_CLIENTS:
+        client = CACHED_CLIENTS[authority]
+    else:
+        if authority in CACHED_CONFIGS:
+            config = CACHED_CONFIGS[authority]
+        elif CACHING is True:
+            CACHED_CONFIGS.update(load_configs(get_config_path()))
+            config = CACHED_CONFIGS[authority]
+        else:
+            configs = load_configs(get_config_path())
+            config = configs[authority]
+
+        client = load_client(config)
+        if CACHING is True:
+            CACHED_CLIENTS[authority] = client
+
+    return client
 
 
 class PathBase(ReadablePath, WritablePath, PathInfo):
     # https://github.com/barneygale/pathlib-abc/blob/0.2.0/pathlib_abc/__init__.py
+    def __init__(self, arg, *args):
+        paths = []
+        for arg in [arg, *args]:
+            if isinstance(arg, SFTPPath):
+                if arg.parser is not self.parser:
+                    # GH-103631: Convert separators for backwards compatibility.
+                    paths.append(arg.as_posix())
+                else:
+                    paths.extend(arg._raw_paths)
+            else:
+                try:
+                    path = os.fspath(arg)
+                except TypeError:
+                    path = arg
+                if not isinstance(path, str):
+                    raise TypeError(
+                        "argument should be a str or an os.PathLike "
+                        "object where __fspath__ returns a str, "
+                        f"not {type(path).__name__!r}")
+                paths.append(path)
+        self._raw_paths = paths
+
     def exists(self, *, follow_symlinks=True):
         """
         Whether this path exists.
@@ -166,7 +225,7 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
     # Everywhere with self.as_posix() should be removed once paramiko supports
     # the Path interface. Then we can pass self.
 
-    def __init__(self, arg, *args, accessor=None):
+    def __init__(self, path, *paths, accessor=None):
         # Reference to the sftp handler is necessary; in pathlib this is
         # equivalent to a reference to the os module; but this module is
         # assumed to be a singleton since it's unexpected for the os to
@@ -176,27 +235,11 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
         # In pathlib _accessor is a union of io and os. open() uses the io
         # module, while mkdir() and touch() uses os.
         # self._path = path
-        self._accessor = accessor if accessor is not None else _load_client()
-        paths = []
-        for arg in [arg, *args]:
-            if isinstance(arg, SFTPPath):
-                if arg.parser is not self.parser:
-                    # GH-103631: Convert separators for backwards compatibility.
-                    paths.append(arg.as_posix())
-                else:
-                    paths.extend(arg._raw_paths)
-            else:
-                try:
-                    path = os.fspath(arg)
-                except TypeError:
-                    path = arg
-                if not isinstance(path, str):
-                    raise TypeError(
-                        "argument should be a str or an os.PathLike "
-                        "object where __fspath__ returns a str, "
-                        f"not {type(path).__name__!r}")
-                paths.append(path)
-        self._raw_paths = paths
+        super().__init__(path, *paths)
+        if accessor is None:
+            self._accessor = get_accessor(self.as_posix())
+        else:
+            self._accessor = accessor
 
     @property
     def _raw_path(self):
@@ -211,13 +254,7 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
 
     @classmethod
     def from_config(cls, path, *paths, config: Config):
-        return cls(path, *paths, load_client(config))
-
-    ALIAS = {}
-
-    @classmethod
-    def set_authority(cls, netloc, path_prefix):
-        cls.ALIAS[netloc] = path_prefix
+        return cls(path, *paths, accessor=load_client(config))
 
     def info(self): return self
 
@@ -341,7 +378,7 @@ class SFTPPath(PathBase):  #(PurePath): fails in older versions due to __new__
         path = self.as_posix()
         parts = urlparse(path)
         if parts.netloc:
-            return type(self).ALIAS[parts.netloc] + parts.path
+            return self._accessor.root + parts.path
         else:
             return path
 
@@ -411,7 +448,3 @@ class FileHandler:
             text = text.encode(self.encoding)
 
         self.file_handler.write(text)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)

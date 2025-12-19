@@ -23,13 +23,15 @@ The **sftppathlib** relies on an instance of an `SFTPClient` to be used. This ca
 
 The default connection will use Paramiko's `SSHClient` to connect. If you are only connecting to one SFTP server, it's recommended to create a config file in the application directory:
 
-* Windows: `~/AppData/Roaming/sftppathlib/config.yaml`
-* Linux: `~/.local/share/sftppathlib/config.yaml`
-* Apple: `~/Library/Application Support/sftppathlib/config.yaml`
+* Windows: `~/AppData/Roaming/sftppathlib/config.ini`
+* Linux: `~/.local/share/sftppathlib/config.ini`
+* Apple: `~/Library/Application Support/sftppathlib/config.ini`
 
 The file should be the parameters passed to [paramiko.SSHClient.connect](https://docs.paramiko.org/en/latest/api/client.html#paramiko.client.SSHClient.connect).
 
-```yaml
+```ini
+[example.com]
+root: /
 hostname: sftp.<domain>
 port: 22
 username: <username>
@@ -43,7 +45,7 @@ After this, `sftppathlib.SFTPPath` can be used like `pathlib.Path`:
 ```py
 from sftppathlib import SFTPPath
 
-root = SFTPPath("www/")
+root = SFTPPath("sftp://example.com")
 path = root / "hello.txt"
 
 path.write_text("hello world", encoding="utf-8")
@@ -53,54 +55,41 @@ for child in root.iterdir():
     print(child)
 ```
 
-**New 0.5.0**: It is also possible to use the `url` by first calling `set_authority`. All urls will be passed through `urllib.parse.urlparse`, and the `netloc` (authority) attribute will be replaced with a prefix that is prepended to the `path` attribute.
+**Note**: All urls will be passed through `urllib.parse.urlparse`, and the `netloc` (authority) attribute will be replaced with a prefix that is prepended to the `path` attribute. By default all configs will be cached, but this can be disabled by setting `sftppathlib.CACHING = False`.
 
-
-```py
-from sftppathlib import SFTPPath
-
-SFTPPath.set_authority("example.com", "www")
-
-root = SFTPPath("example.com/")
-path = root / "hello.txt"
-
-path.write_text("hello world", encoding="utf-8")
-print(path.read_text(encoding="utf-8"))
-
-for child in root.iterdir():
-    print(child)
-```
+**Note**: The protocol (sftp) will be ignored. It suffices to write `"https://example.com"` or `"//example.com"`, but `urllib.parse.urlparse` expects at least `//`.
 
 
 ### Without setup
 
-**Note**: The `CREDENTIALS` variable should be imported from another file or a module; never include secrets in code.
+**New 0.5.2**: It is also possible to pass the credentials explicitly.
 
-**New 0.5.0**: Added `SFTPPath.from_config` and `config_credentials`.
 
 ```py
-import paramiko
-import sft
 from sftppathlib import SFTPPath
 
-SFTPPath.set_authority("example.com", "www")
-
 CREDENTIALS = {
+    "root": "/",
     "hostname": "sftp.<domain>",
     "port": 22,
     "username": "<username>",
     "password": "<password>",
 }
 
-# Alternative 1
-root = SFTPPath.from_config("example.com/", CREDENTIALS)
+root = SFTPPath.from_config("sftp://example.com", config=CREDENTIALS)
+path = root / "hello.txt"
 
-# Alternative 2
-config_credentials(CREDENTIALS)
-root = SFTPPath("example.com")
+path.write_text("hello world", encoding="utf-8")
+print(path.read_text(encoding="utf-8"))
 
-...
+for child in root.iterdir():
+    print(child)
 ```
+
+
+**Note**: The `CREDENTIALS` variable should be imported from another file or a module; never include secrets in code.
+
+**Note**: Both the protocol (sftp) and authority (example.com) will be ignored. It suffices to write `"//*"`. The authority is only used to look up the config/client.
 
 
 <details><summary>pre 0.5</summary>
@@ -122,9 +111,10 @@ ssh_client.connect(**CREDENTIALS)
 
 sftp_client = paramiko.sftp_client.SFTPClient.from_transport(
     ssh_client.get_transport())
+sftp_client.root = "/"
 
 
-root = SFTPPath("www/", accessor=sftp_client)
+root = SFTPPath("sftp://example.com/", accessor=sftp_client)
 
 ...
 ```
@@ -144,7 +134,7 @@ sftp_path_client = SFTPPathClient.from_transport(
     ssh_client.get_transport())
 
 
-root = sftp_path_client.SFTPPath("www/")
+root = sftp_path_client.SFTPPath("sftp://root/")
 
 ...
 ```
