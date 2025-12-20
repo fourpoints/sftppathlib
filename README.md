@@ -4,6 +4,9 @@
 
 The documentation is the same as the standard [**pathlib**](https://docs.python.org/3/library/pathlib.html) library, with some differences.
 
+## Changelog
+
+* `0.5.4` / 2025-12-20: Fixed `rename`.
 
 ## Differences
 

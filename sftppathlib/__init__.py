@@ -12,7 +12,7 @@ from stat import S_ISDIR, S_ISREG
 from typing import TypedDict
 from urllib.parse import urlparse
 
-__version__ = "0.5.3"
+__version__ = "0.5.4"
 logger = logging.getLogger(__name__)
 # _CACHED_CLIENT = None
 
@@ -59,6 +59,7 @@ def load_client(config: Config):
     sftp_client.close = close
 
     # Root directory
+    # sftp_client.chdir(root)
     sftp_client.root = root
 
     return sftp_client
@@ -224,24 +225,24 @@ class SFTPPath(PathBase):
 
     def stat(self, *, follow_symlinks=True) -> sftp_attr.SFTPAttributes:
         logger.warning("Argument 'follow_symlinks' ignored.")
-        return self._accessor.stat(self._as_path())
+        return self._accessor.stat(self.__fspath__())
 
     def open(self, mode="rb", buffering=-1, encoding=None,
              errors=None, newline=None):
         return FileHandler(
-            self._accessor.open(self._as_path(), mode=mode, bufsize=buffering),
+            self._accessor.open(self.__fspath__(), mode=mode, bufsize=buffering),
             encoding, errors, newline)
 
     vfsopen = open
 
     def __open(self, mode, buffering=-1):
-        return self._accessor.open(self._as_path(), mode=mode, bufsize=buffering)
+        return self._accessor.open(self.__fspath__(), mode=mode, bufsize=buffering)
 
     __open_reader__ = partial(__open, mode="r")
     __open_writer__ = __open
 
     def iterdir(self):
-        for path in self._accessor.listdir(self._as_path()):
+        for path in self._accessor.listdir(self.__fspath__()):
             yield type(self)(self._raw_path, path, accessor=self._accessor)
 
     def absolute(self):
@@ -263,7 +264,10 @@ class SFTPPath(PathBase):
 
     def symlink_to(self, target, target_is_directory=None):
         logger.warning("Argument 'target_is_directory' ignored.")
-        self.symlink_to(target, self._as_path())
+        self.symlink_to(
+            type(self)(target, accessor=self._accessor),
+            self.__fspath__()
+        )
 
     def hardlink_to(self, target):
         raise NotImplementedError
@@ -278,7 +282,7 @@ class SFTPPath(PathBase):
 
         attrblock = sftp_attr.SFTPAttributes()
         t, msg = self._accessor._request(
-            sftp.CMD_OPEN, self._as_path(), flags, attrblock)
+            sftp.CMD_OPEN, self.__fspath__(), flags, attrblock)
 
         if t != sftp.CMD_HANDLE:
             raise sftp.SFTPError("Expected handle")
@@ -292,20 +296,20 @@ class SFTPPath(PathBase):
 
     def mkdir(self, mode=0o777, parents=False, exist_ok=False):
         try:
-            self._accessor.mkdir(self._as_path(), mode)
+            self._accessor.mkdir(self.__fspath__(), mode)
         except FileNotFoundError:
             if not parents or self.parent == self:
                 raise
             self.parent.mkdir(parents=True, exist_ok=True)
-            self.mkdir(self._as_path(), mode, parent=False, exist_ok=exist_ok)
+            self.mkdir(self.__fspath__(), mode, parent=False, exist_ok=exist_ok)
         except OSError:
             if not exist_ok or not self.is_dir():
                 raise
 
     def rename(self, target):
         self._accessor.rename(
-            self._as_path(),
-            str(target),
+            self.__fspath__(),
+            type(self)(target, accessor=self._accessor).__fspath__(),
         )
 
     # Unsupported
@@ -313,13 +317,13 @@ class SFTPPath(PathBase):
 
     def chmod(self, mode, *, follow_symlinks=None):
         logger.warning("Argument 'follow_symlinks' ignored.")
-        self._accessor.chmod(self._as_path(), mode)
+        self._accessor.chmod(self.__fspath__(), mode)
 
     def unlink(self):
-        self._accessor.remove(self._as_path())
+        self._accessor.remove(self.__fspath__())
 
     def rmdir(self):
-        self._accessor.rmdir(self._as_path())
+        self._accessor.rmdir(self.__fspath__())
 
     # Unsupported
     # def owner(): pass
@@ -332,14 +336,6 @@ class SFTPPath(PathBase):
 
     # Unsupported
     # def as_uri(): pass
-
-    def _as_path(self):
-        path = self.as_posix()
-        parts = urlparse(path)
-        if parts.netloc:
-            return self._accessor.root + parts.path
-        else:
-            return path
 
     def as_posix(self):
         """Return the string representation of the path with forward (/)
@@ -354,7 +350,12 @@ class SFTPPath(PathBase):
 
     # Required for PathLike objects
     def __fspath__(self):
-        return self.as_posix()
+        path = self.as_posix()
+        parts = urlparse(path)
+        if parts.netloc:
+            return self._accessor.root + parts.path
+        else:
+            return path
 
     __vfspath__ = __fspath__
 

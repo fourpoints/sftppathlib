@@ -44,3 +44,16 @@ def test_from_config():
 def test_parts():
     p = SFTPPath("sftp://example.com", "in\\the", "world")
     assert p.as_posix() == 'sftp://example.com/in\\the/world'
+
+
+def test_rename():
+    p = SFTPPath("sftp://example.com/tmp")
+    f1 = p / "test-file-1.txt"
+    f2 = p / "test-file-2.txt"
+    f1.touch()
+    assert f1.exists()
+    f1.rename(f2)
+    assert not f1.exists()
+    assert f2.exists()
+    f2.unlink()
+    assert not f2.exists()
