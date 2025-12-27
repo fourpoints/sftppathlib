@@ -8,8 +8,9 @@ def test_non_implemented_abstractmethod():
         path.hardlink_to("hello")
 
 
-def test_read():
+def test_exists():
     path = SFTPPath("sftp://example.com/tmp")
+    print(path.__sftppath__())
     assert path.exists()
 
 
@@ -44,6 +45,17 @@ def test_from_config():
 def test_parts():
     p = SFTPPath("sftp://example.com", "in\\the", "world")
     assert p.as_posix() == 'sftp://example.com/in\\the/world'
+
+
+def test_parent():
+    p = SFTPPath("sftp://example.com/tmp/file")
+    assert p.parent == SFTPPath("sftp://example.com/tmp")
+
+
+def test_init():
+    p = SFTPPath("sftp://example.com/tmp/file")
+    p = SFTPPath(p)
+    assert True
 
 
 def test_rename():
