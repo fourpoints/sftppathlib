@@ -6,6 +6,7 @@ The documentation is the same as the standard [**pathlib**](https://docs.python.
 
 ## Changelog
 
+* `0.5.5` / 2025-12-27: Fixed `.parents` not working. Removed `PurePath` inheritance.
 * `0.5.4` / 2025-12-20: Fixed `rename`.
 
 ## Differences

@@ -13,7 +13,7 @@ from typing import TypedDict
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from functools import reduce
 
-__version__ = "0.5.4"
+__version__ = "0.5.5"
 logger = logging.getLogger(__name__)
 # _CACHED_CLIENT = None
 
